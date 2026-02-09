@@ -216,6 +216,7 @@ confrestart_SOURCES = tools/confrestart.c \
 nodist_confrestart_SOURCES = $(__common_generated_sources)
 
 gradflow_test_SOURCES = tools/gradflow_test.c \
+	$(__common_sources) \
     OpenAcc/gradient_flow.c \
     OpenAcc/gradient_flow.h
 
