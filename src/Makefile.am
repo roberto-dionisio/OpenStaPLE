@@ -173,7 +173,7 @@ __common_sources = \
 	tests_and_benchmarks/test_and_benchmarks.c \
 	tests_and_benchmarks/test_and_benchmarks.h 
 
-bin_PROGRAMS = main deo_doe_test inverter_multishift_test checkinput confconverter confrestart
+bin_PROGRAMS = main deo_doe_test inverter_multishift_test checkinput confconverter confrestart gradflow_test
 
 noinst_LIBRARIES = libdbghook.a
 
@@ -214,6 +214,11 @@ confrestart_SOURCES = tools/confrestart.c \
 	$(__common_sources)
 
 nodist_confrestart_SOURCES = $(__common_generated_sources)
+
+gradflow_test_SOURCES = tools/gradflow_test.c \
+    $(__common_sources)
+
+nodist_gradflow_test_SOURCES = $(__common_generated_sources)
 
 libdbghook_a_SOURCES = DbgTools/debugger_hook.c
 libdbghook_a_CFLAGS = -O0
