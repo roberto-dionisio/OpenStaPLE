@@ -84,6 +84,25 @@ int main(int argc, char **argv)
 
     // This initializes globals used throughout the code (mc_params/debug_settings/etc.).
     set_global_vars_and_fermions_from_input_file((char *)setfile);
+    //debug reading geom from input
+    if (geom_par.gnx == 0 || geom_par.gny == 0 || geom_par.gnz == 0 || geom_par.gnt == 0) {
+    if (devinfo.myrank_world == 0) {
+        fprintf(stderr,
+                "attentionnnn: Geometry not read from input file  "
+                "Falling back to hardcoded geometry  and default mapping.\n");
+    }
+    geom_par.gnx = GL_N0;
+    geom_par.gny = GL_N1;
+    geom_par.gnz = GL_N2;
+    geom_par.gnt = GL_N3;
+
+    // Safe default unique mapping
+    geom_par.xmap = 0;
+    geom_par.ymap = 1;
+    geom_par.zmap = 2;
+    geom_par.tmap = 3;
+}
+
     set_geom_glv(&geom_par);
     // Allocate the standard OpenStaPLE buffers (including conf_acc).
     mem_alloc_core();
