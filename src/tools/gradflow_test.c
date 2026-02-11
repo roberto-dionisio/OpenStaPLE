@@ -6,8 +6,13 @@
 #include "../OpenAcc/alloc_vars.h"
 #include "../OpenAcc/geometry.h"
 #include "../OpenAcc/io.h"
+#include "../OpenAcc/deviceinit.h"
 #include "../OpenAcc/gradient_flow.h"
 #include "../OpenAcc/su3_measurements.h"
+
+#ifndef __GNUC__
+#include "openacc.h"
+#endif
 
 #ifdef MULTIDEVICE
 #include <mpi.h>
@@ -103,13 +108,27 @@ int main(int argc, char **argv)
     geom_par.tmap = 3;
 }
 
+#ifndef __GNUC__
+    // Match main.c device init 
+    acc_device_t my_device_type = acc_device_nvidia;
+#ifdef MULTIDEVICE
+    select_init_acc_device(my_device_type,
+        (devinfo.single_dev_choice + devinfo.myrank_world) % devinfo.proc_per_node);
+#else
+    select_init_acc_device(my_device_type, devinfo.single_dev_choice);
+#endif
+#endif
+
     set_geom_glv(&geom_par);
     // Allocate the standard OpenStaPLE buffers (including conf_acc).
     mem_alloc_core();
     mem_alloc_extended();
     mem_alloc_core_f();
     mem_alloc_extended_f();
-
+    
+    compute_nnp_and_nnm_openacc();
+    #pragma acc enter data copyin(nnp_openacc)
+    #pragma acc enter data copyin(nnm_openacc)
     // Read configuration into conf_acc and push to device (matches test code patterns).
     int file_conf_id = 0;
     if (read_conf_wrapper(conf_acc, conf_in, &file_conf_id, use_ildg)) {
