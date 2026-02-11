@@ -84,7 +84,7 @@ int main(int argc, char **argv)
 
     // This initializes globals used throughout the code (mc_params/debug_settings/etc.).
     set_global_vars_and_fermions_from_input_file((char *)setfile);
-
+    set_geom_glv(&geom_par);
     // Allocate the standard OpenStaPLE buffers (including conf_acc).
     mem_alloc_core();
     mem_alloc_extended();
