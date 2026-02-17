@@ -9,6 +9,146 @@
 #include "../Mpi/communications.h"
 #endif
 
+static void su3_soa_copy(__restrict su3_soa *dst, __restrict const su3_soa *src)
+{
+    int d0, d1, d2, d3;
+    #pragma acc parallel loop collapse(4) present(dst, src)
+    for (d3 = D3_HALO; d3 < nd3 - D3_HALO; d3++) {
+        for (d2 = 0; d2 < nd2; d2++) {
+            for (d1 = 0; d1 < nd1; d1++) {
+                for (d0 = 0; d0 < nd0; d0++) {
+                    const int idxh = snum_acc(d0, d1, d2, d3);
+                    const int parity = (d0 + d1 + d2 + d3) & 1;
+                    #pragma acc loop seq
+                    for (int mu = 0; mu < 4; mu++) {
+                        const int dir = 2 * mu + parity;
+                        dst[dir].rc00[idxh] = src[dir].rc00[idxh];
+                        dst[dir].rc11[idxh] = src[dir].rc11[idxh];
+                        dst[dir].c01[idxh]  = src[dir].c01[idxh];
+                        dst[dir].c02[idxh]  = src[dir].c02[idxh];
+                        dst[dir].c12[idxh]  = src[dir].c12[idxh];
+                    }
+                }
+            }
+        }
+    }
+}
+
+static double su3_soa_max_dist(__restrict const su3_soa *A,
+                               __restrict const su3_soa *B)
+{
+    double maxd = 0.0;
+    int d0, d1, d2, d3;
+
+    // distance per link computed on the stored rc00, rc11, c01, c02, c12
+    #pragma acc parallel loop collapse(4) reduction(max:maxd) present(A, B)
+    for (d3 = D3_HALO; d3 < nd3 - D3_HALO; d3++) {
+        for (d2 = 0; d2 < nd2; d2++) {
+            for (d1 = 0; d1 < nd1; d1++) {
+                for (d0 = 0; d0 < nd0; d0++) {
+                    const int idxh = snum_acc(d0, d1, d2, d3);
+                    const int parity = (d0 + d1 + d2 + d3) & 1;
+
+                    #pragma acc loop seq
+                    for (int mu = 0; mu < 4; mu++) {
+                        const int dir = 2 * mu + parity;
+
+                        const double drc00 = A[dir].rc00[idxh] - B[dir].rc00[idxh];
+                        const double drc11 = A[dir].rc11[idxh] - B[dir].rc11[idxh];
+
+                        const d_complex dc01 = A[dir].c01[idxh] - B[dir].c01[idxh];
+                        const d_complex dc02 = A[dir].c02[idxh] - B[dir].c02[idxh];
+                        const d_complex dc12 = A[dir].c12[idxh] - B[dir].c12[idxh];
+
+                        const double dc01r = creal(dc01);
+                        const double dc01i = cimag(dc01);
+                        const double dc02r = creal(dc02); 
+                        const double dc02i = cimag(dc02);
+                        const double dc12r = creal(dc12);
+                        const double dc12i = cimag(dc12);
+
+                        double dist2 = 0.0;
+                        dist2 += drc00 * drc00 + drc11 * drc11;
+                        dist2 += dc01r * dc01r + dc01i * dc01i;
+                        dist2 += dc02r * dc02r + dc02i * dc02i;
+                        dist2 += dc12r * dc12r + dc12i * dc12i;
+
+                        const double dist = sqrt(dist2);
+                        if (dist > maxd) maxd = dist;
+                    }
+                }
+            }
+        }
+    }
+
+    // norm by Nc**3
+    return maxd / 9.0;
+}
+
+static double gradflow_wilson_RKstep_adaptive_aux(__restrict const su3_soa *W0,
+                                                  __restrict gradflow_workspace *ws,
+                                                  double dt)
+{
+    // Z0, W1 = exp(-1/4 Z0) W0
+    gradflow_compute_Z_wilson(W0, ws->staples, ws->Z0, dt);
+    tamat_lincomb2(ws->Zcomb, ws->Z0, 0.25, ws->Z0, 0.0);
+    exp_minus_QA_times_conf(W0, ws->Zcomb, ws->W1, ws->exp_aux);
+
+    // Z1
+    gradflow_compute_Z_wilson(ws->W1, ws->staples, ws->Z1, dt);
+
+    // W2' = exp(-(2 Z1 - Z0)) W0   (second order estimate)
+    tamat_lincomb2(ws->Zcomb, ws->Z1, 2.0, ws->Z0, -1.0);
+    exp_minus_QA_times_conf(W0, ws->Zcomb, ws->W2prime, ws->exp_aux);
+
+    // W2 = exp(-(8/9 Z1 - 17/36 Z0)) W1
+    tamat_lincomb2(ws->Zcomb, ws->Z1, (8.0 / 9.0), ws->Z0, (-17.0 / 36.0));
+    exp_minus_QA_times_conf(ws->W1, ws->Zcomb, ws->W2, ws->exp_aux);
+
+    // Z2 and W3 (third order result) into ws->W1 reusing the buffer 
+    gradflow_compute_Z_wilson(ws->W2, ws->staples, ws->Z2, dt);
+    tamat_lincomb2(ws->Zcomb, ws->Z2, (3.0 / 4.0), ws->Zcomb, -1.0);
+    exp_minus_QA_times_conf(ws->W2, ws->Zcomb, ws->W1, ws->exp_aux);
+
+    // error estimate
+    const double max_dist = su3_soa_max_dist(ws->W1, ws->W2prime);
+
+    // unitarizationn of the accepted sol
+    unitarize_conf(ws->W1);
+
+    return max_dist;
+}
+
+double gradflow_wilson_RKstep_adaptive(__restrict su3_soa *V,
+                                       __restrict gradflow_workspace *ws,
+                                       double *t,
+                                       double *dt,
+                                       double delta,
+                                       double dt_max,
+                                       int *accepted)
+{
+    const double max_dist = gradflow_wilson_RKstep_adaptive_aux(V, ws, *dt);
+
+    if (max_dist < delta) {
+        *accepted = 1;
+        *t += *dt;
+        su3_soa_copy(V, ws->W1);
+    } else {
+        *accepted = 0;
+    }
+
+    // adapt dt (error ~ dt**3)
+    const double eps = 1.0e-30;
+    const double denom = (max_dist > eps) ? max_dist : eps;
+    double new_dt = (*dt) * 0.95 * pow(delta / denom, 1.0 / 3.0);
+
+    if (new_dt > dt_max) new_dt = dt_max;
+    if (new_dt < eps) new_dt = eps;
+    *dt = new_dt;
+
+    return max_dist;
+}
+
 static void tamat_scale_inplace(__restrict tamat_soa *A, double alpha)
 {
     int d0, d1, d2, d3;
@@ -34,6 +174,45 @@ static void tamat_scale_inplace(__restrict tamat_soa *A, double alpha)
         }
     }
 }
+
+void gradflow_perform_measures_localobs_adaptive(__restrict su3_soa *V,
+                                                 __restrict gradflow_workspace *ws,
+                                                 const gradflow_adaptive_meas_params *p,
+                                                 gradflow_measure_cb cb,
+                                                 void *user_data,
+                                                 __restrict su3_soa *V_backup_or_null)
+{
+    double t = 0.0;
+    double dt = p->dt0;
+    int meas_count = 0;
+
+    if (V_backup_or_null) su3_soa_copy(V_backup_or_null, V);
+
+    while (meas_count < p->num_meas) {
+        int accepted = 0;
+        gradflow_wilson_RKstep_adaptive(V, ws, &t, &dt, p->delta, p->dt_max, &accepted);
+
+        if (accepted == 1) {
+            const double target = p->meas_each * (double)(meas_count + 1);
+            if (fabs(t - target) - p->time_bin < MIN_VALUE) {
+                if (cb) cb(meas_count, t, user_data);
+                meas_count++;
+            }
+        }
+
+        // adapt dt to not skip next measure time and having homegenous measurement bins
+        {
+            const double next_target = p->meas_each * (double)(meas_count + 1);
+            if ((t + dt - next_target) > p->time_bin) {
+                const double forced = next_target - t;
+                if (forced > 0.0) dt = forced;
+            }
+        }
+    }
+
+    if (V_backup_or_null) su3_soa_copy(V, V_backup_or_null);
+}
+
 
 static void tamat_lincomb2(__restrict tamat_soa *OUT,
                            const __restrict tamat_soa *A, double a,
@@ -79,7 +258,7 @@ static void gradflow_compute_Z_wilson(__restrict const su3_soa *V,
     calc_loc_staples_nnptrick_all(V, staples);
     conf_times_staples_ta_part(V, staples, Zout);
 
-    tamat_scale_inplace(Zout, +dt); // check sign 
+    tamat_scale_inplace(Zout, +dt);  
 }
 
 void gradflow_wilson_RKstep(__restrict su3_soa *V,

@@ -30,6 +30,7 @@ static void alloc_ws(gradflow_workspace *ws)
     if (posix_memalign((void **)&ws->W2, ALIGN, 8 * sizeof(su3_soa))) exit(1);
     if (posix_memalign((void **)&ws->staples, ALIGN, 8 * sizeof(su3_soa))) exit(1);
     if (posix_memalign((void **)&ws->exp_aux, ALIGN, 8 * sizeof(su3_soa))) exit(1);
+    if (posix_memalign((void **)&ws->W2prime, ALIGN, 8 * sizeof(su3_soa))) exit(1);
 
     if (posix_memalign((void **)&ws->Z0, ALIGN, 8 * sizeof(tamat_soa))) exit(1);
     if (posix_memalign((void **)&ws->Z1, ALIGN, 8 * sizeof(tamat_soa))) exit(1);
@@ -37,13 +38,13 @@ static void alloc_ws(gradflow_workspace *ws)
     if (posix_memalign((void **)&ws->Zcomb, ALIGN, 8 * sizeof(tamat_soa))) exit(1);
 
     
-    #pragma acc enter data create(ws->W1[0:8], ws->W2[0:8], ws->staples[0:8], ws->exp_aux[0:8])
+    #pragma acc enter data create(ws->W1[0:8], ws->W2[0:8], ws->W2prime[0:8], ws->staples[0:8], ws->exp_aux[0:8])
     #pragma acc enter data create(ws->Z0[0:8], ws->Z1[0:8], ws->Z2[0:8], ws->Zcomb[0:8])
 }
 
 static void free_ws(gradflow_workspace *ws)
 {
-    #pragma acc exit data delete(ws->W1[0:8], ws->W2[0:8], ws->staples[0:8], ws->exp_aux[0:8])
+    #pragma acc exit data delete(ws->W1[0:8], ws->W2[0:8], ws->W2prime[0:8], ws->staples[0:8], ws->exp_aux[0:8])
     #pragma acc exit data delete(ws->Z0[0:8], ws->Z1[0:8], ws->Z2[0:8], ws->Zcomb[0:8])
 
     free(ws->W1);
@@ -54,6 +55,20 @@ static void free_ws(gradflow_workspace *ws)
     free(ws->Z1);
     free(ws->Z2);
     free(ws->Zcomb);
+    free(ws->W2prime);
+}
+
+static void meas_cb_plaq(int meas_idx, double t, void *user_data)
+{
+    (void)user_data;
+
+    // configuration is conf_acc on device and computes plaquette on device
+    double plaq = calc_plaquette_soloopenacc(conf_acc, aux_conf_acc, local_sums);
+
+    if (devinfo.myrank == 0) {
+        printf("meas %d  t=%.18lf  plaq(norm)=%.18lf\n",
+               meas_idx, t, plaq / GL_SIZE / 6.0 / 3.0);
+    }
 }
 
 int main(int argc, char **argv)
@@ -71,8 +86,11 @@ int main(int argc, char **argv)
         if (devinfo.myrank == 0) {
             fprintf(stderr,
                     "USAGE:\n"
-                    "  %s <input.set> <conf_in> <use_ildg:0|1> <nsteps> <dt> <out_name>\n",
-                    argv[0]);
+                    "  %s <input.set> <conf_in> <use_ildg:0|1> <nsteps_or_num_meas> <dt_or_dt0> <out_name>\n"
+                    "\n"
+                    "Optional (enables adaptive flow):\n"
+                    "  %s <input.set> <conf_in> <use_ildg:0|1> <num_meas> <dt0> <out_name> <delta> <dt_max> <meas_each> <time_bin>\n",
+                    argv[0], argv[0]);
         }
 #ifdef MULTIDEVICE
         MPI_Finalize();
@@ -83,9 +101,10 @@ int main(int argc, char **argv)
     const char *setfile = argv[1];
     const char *conf_in = argv[2];
     const int use_ildg = atoi(argv[3]);
-    const int nsteps = atoi(argv[4]);
-    const double dt = atof(argv[5]);
+    const int nsteps_or_num_meas = atoi(argv[4]);
+    const double dt_or_dt0 = atof(argv[5]);
     const char *out_name = argv[6];
+    const int use_adaptive = (argc >= 11);
 
     // This initializes globals used throughout the code (mc_params/debug_settings/etc.).
     set_global_vars_and_fermions_from_input_file((char *)setfile);
@@ -129,7 +148,7 @@ int main(int argc, char **argv)
     compute_nnp_and_nnm_openacc();
     #pragma acc enter data copyin(nnp_openacc)
     #pragma acc enter data copyin(nnm_openacc)
-    // Read configuration into conf_acc and push to device (matches test code patterns).
+    // Read configuration into conf_acc
     int file_conf_id = 0;
     if (read_conf_wrapper(conf_acc, conf_in, &file_conf_id, use_ildg)) {
         if (devinfo.myrank == 0) fprintf(stderr, "ERROR: failed to read conf %s\n", conf_in);
@@ -150,15 +169,38 @@ int main(int argc, char **argv)
     memset(&ws, 0, sizeof(ws));
     alloc_ws(&ws);
 
-    for (int i = 0; i < nsteps; i++) {
-        gradflow_wilson_RKstep(conf_acc, &ws, dt);
-        // sanity checkk
-        if ((i % 10) == 0) {
-            double plaqi = calc_plaquette_soloopenacc(conf_acc, aux_conf_acc, local_sums);
-            if (devinfo.myrank == 0)
-                printf("step %d  plaq(norm)=%.18lf\n", i + 1, plaqi / GL_SIZE / 6.0 / 3.0);
+    if (!use_adaptive) {
+        for (int i = 0; i < nsteps_or_num_meas; i++) {
+            gradflow_wilson_RKstep(conf_acc, &ws, dt_or_dt0);
+
+            if ((i % 10) == 0) {
+                double plaqi = calc_plaquette_soloopenacc(conf_acc, aux_conf_acc, local_sums);
+                if (devinfo.myrank == 0)
+                    printf("step %d  plaq(norm)=%.18lf\n", i + 1, plaqi / GL_SIZE / 6.0 / 3.0);
+            }
         }
+    } else {
+        const double delta    = atof(argv[7]);
+        const double dt_max   = atof(argv[8]);
+        const double meas_each = atof(argv[9]);
+        const double time_bin  = atof(argv[10]);
+
+        gradflow_adaptive_meas_params p;
+        p.dt0 = dt_or_dt0;
+        p.delta = delta;
+        p.dt_max = dt_max;
+        p.num_meas = nsteps_or_num_meas;
+        p.meas_each = meas_each;
+        p.time_bin = time_bin;
+
+        if (devinfo.myrank == 0) {
+            printf("AGF: num_meas=%d dt0=%.18lf delta=%.3e dt_max=%.18lf meas_each=%.18lf time_bin=%.3e\n",
+                   p.num_meas, p.dt0, p.delta, p.dt_max, p.meas_each, p.time_bin);
+        }
+
+        gradflow_perform_measures_localobs_adaptive(conf_acc, &ws, &p, meas_cb_plaq, NULL, NULL);
     }
+    
     // plaquette after flow
     double plaq1 = calc_plaquette_soloopenacc(conf_acc, aux_conf_acc, local_sums);
     if (devinfo.myrank == 0) {
