@@ -22,11 +22,13 @@ static void su3_soa_copy(__restrict su3_soa *dst, __restrict const su3_soa *src)
                     #pragma acc loop seq
                     for (int mu = 0; mu < 4; mu++) {
                         const int dir = 2 * mu + parity;
-                        dst[dir].rc00[idxh] = src[dir].rc00[idxh];
-                        dst[dir].rc11[idxh] = src[dir].rc11[idxh];
-                        dst[dir].c01[idxh]  = src[dir].c01[idxh];
-                        dst[dir].c02[idxh]  = src[dir].c02[idxh];
-                        dst[dir].c12[idxh]  = src[dir].c12[idxh];
+                        dst[dir].r0.c0[idxh] = src[dir].r0.c0[idxh];
+                        dst[dir].r0.c1[idxh] = src[dir].r0.c1[idxh];
+                        dst[dir].r0.c2[idxh] = src[dir].r0.c2[idxh];
+
+                        dst[dir].r1.c0[idxh] = src[dir].r1.c0[idxh];
+                        dst[dir].r1.c1[idxh] = src[dir].r1.c1[idxh];
+                        dst[dir].r1.c2[idxh] = src[dir].r1.c2[idxh];
                     }
                 }
             }
@@ -53,25 +55,21 @@ static double su3_soa_max_dist(__restrict const su3_soa *A,
                     for (int mu = 0; mu < 4; mu++) {
                         const int dir = 2 * mu + parity;
 
-                        const double drc00 = A[dir].rc00[idxh] - B[dir].rc00[idxh];
-                        const double drc11 = A[dir].rc11[idxh] - B[dir].rc11[idxh];
+                        const d_complex d00 = A[dir].r0.c0[idxh] - B[dir].r0.c0[idxh];
+                        const d_complex d01 = A[dir].r0.c1[idxh] - B[dir].r0.c1[idxh];
+                        const d_complex d02 = A[dir].r0.c2[idxh] - B[dir].r0.c2[idxh];
 
-                        const d_complex dc01 = A[dir].c01[idxh] - B[dir].c01[idxh];
-                        const d_complex dc02 = A[dir].c02[idxh] - B[dir].c02[idxh];
-                        const d_complex dc12 = A[dir].c12[idxh] - B[dir].c12[idxh];
-
-                        const double dc01r = creal(dc01);
-                        const double dc01i = cimag(dc01);
-                        const double dc02r = creal(dc02); 
-                        const double dc02i = cimag(dc02);
-                        const double dc12r = creal(dc12);
-                        const double dc12i = cimag(dc12);
+                        const d_complex d10 = A[dir].r1.c0[idxh] - B[dir].r1.c0[idxh];
+                        const d_complex d11 = A[dir].r1.c1[idxh] - B[dir].r1.c1[idxh];
+                        const d_complex d12 = A[dir].r1.c2[idxh] - B[dir].r1.c2[idxh];
 
                         double dist2 = 0.0;
-                        dist2 += drc00 * drc00 + drc11 * drc11;
-                        dist2 += dc01r * dc01r + dc01i * dc01i;
-                        dist2 += dc02r * dc02r + dc02i * dc02i;
-                        dist2 += dc12r * dc12r + dc12i * dc12i;
+                        dist2 += creal(d00) * creal(d00) + cimag(d00) * cimag(d00);
+                        dist2 += creal(d01) * creal(d01) + cimag(d01) * cimag(d01);
+                        dist2 += creal(d02) * creal(d02) + cimag(d02) * cimag(d02);
+                        dist2 += creal(d10) * creal(d10) + cimag(d10) * cimag(d10);
+                        dist2 += creal(d11) * creal(d11) + cimag(d11) * cimag(d11);
+                        dist2 += creal(d12) * creal(d12) + cimag(d12) * cimag(d12);
 
                         const double dist = sqrt(dist2);
                         if (dist > maxd) maxd = dist;
@@ -263,7 +261,7 @@ void gradflow_perform_measures_localobs_adaptive(__restrict su3_soa *V,
 
         if (accepted == 1) {
             const double target = p->meas_each * (double)(meas_count + 1);
-            if (fabs(t - target) - p->time_bin < MIN_VALUE) {
+            if (fabs(t - target) <= p->time_bin) {
                 if (cb) cb(meas_count, t, user_data);
                 meas_count++;
             }
