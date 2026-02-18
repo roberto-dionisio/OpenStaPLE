@@ -220,7 +220,6 @@ double gradflow_wilson_RKstep_adaptive(__restrict su3_soa *V,
                                        double dt_max,
                                        int *accepted)
 {
-    const double max_dist = gradflow_wilson_RKstep_adaptive_aux(V, ws, *dt);
     //debug
     static long dbg_attempt = 0;
 
