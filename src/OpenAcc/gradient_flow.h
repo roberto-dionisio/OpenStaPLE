@@ -19,9 +19,7 @@ typedef struct gradflow_workspace_t {
 
 typedef void (*gradflow_measure_cb)(int meas_idx, double t, void *user_data);
 
-void gradflow_compute_Z0_wilson(__restrict const su3_soa *V,
-                               __restrict gradflow_workspace *ws,
-                               double dt);
+
 
 
 typedef struct gradflow_adaptive_meas_params_t {
@@ -51,5 +49,9 @@ void gradflow_perform_measures_localobs_adaptive(__restrict su3_soa *V,
                                                  gradflow_measure_cb cb,
                                                  void *user_data,
                                                  __restrict su3_soa *V_backup_or_null);
+
+void gradflow_compute_Z0_wilson(__restrict const su3_soa *V,
+                               __restrict gradflow_workspace *ws,
+                               double dt);
 
 #endif
