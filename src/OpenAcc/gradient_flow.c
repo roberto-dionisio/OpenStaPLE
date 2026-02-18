@@ -221,7 +221,14 @@ double gradflow_wilson_RKstep_adaptive(__restrict su3_soa *V,
                                        int *accepted)
 {
     const double max_dist = gradflow_wilson_RKstep_adaptive_aux(V, ws, *dt);
+    //debug
+    static long dbg_attempt = 0;
 
+    const double t_before = *t;
+    const double dt_try   = *dt;
+
+    const double max_dist = gradflow_wilson_RKstep_adaptive_aux(V, ws, dt_try);
+    //edebug
     if (max_dist < delta) {
         *accepted = 1;
         *t += *dt;
@@ -237,8 +244,10 @@ double gradflow_wilson_RKstep_adaptive(__restrict su3_soa *V,
 
     if (new_dt > dt_max) new_dt = dt_max;
     if (new_dt < eps) new_dt = eps;
-    printf("AGF debug step %ld:acc =%d t:%.18lf->%.18lf dt_try=%.6e err=%.4e dt_new=%.6e \n",
-           (long int)(*t / *dt), *accepted, *t, *t + *dt, *dt, max_dist, new_dt);
+
+    dbg_attempt++;
+    printf("AGF dbg #%ld: acc=%d  t:%.18lf -> %.18lf  dt_try=%.6e  err=%.4e  dt_new=%.6e\n",
+           dbg_attempt, *accepted, t_before, *t, dt_try, max_dist, new_dt);
     *dt = new_dt;
 
     return max_dist;
