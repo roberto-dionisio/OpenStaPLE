@@ -75,6 +75,8 @@ int main(int argc, char **argv)
 {
 #ifdef MULTIDEVICE
     MPI_Init(&argc, &argv);
+    pre_init_multidev1D(&devinfo);
+    if (devinfo.proc_per_node<=0) devinfo.proc_per_node=1; // debug safety
     init_multidev1D(&devinfo);
 #else
     devinfo.myrank = 0;
