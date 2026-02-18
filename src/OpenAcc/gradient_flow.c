@@ -175,7 +175,7 @@ void gradflow_wilson_RKstep(__restrict su3_soa *V,
     exp_minus_QA_times_conf(ws->W2, ws->Zcomb, V, ws->exp_aux);
 
     // safety
-    // unitarize_conf(V);
+     unitarize_conf(V);
 }
 
 static double gradflow_wilson_RKstep_adaptive_aux(__restrict const su3_soa *W0,
@@ -207,7 +207,7 @@ static double gradflow_wilson_RKstep_adaptive_aux(__restrict const su3_soa *W0,
     const double max_dist = su3_soa_max_dist(ws->W1, ws->W2prime);
 
     // unitarizationn of the accepted sol
-    //unitarize_conf(ws->W1);
+    unitarize_conf(ws->W1);
 
     return max_dist;
 }
