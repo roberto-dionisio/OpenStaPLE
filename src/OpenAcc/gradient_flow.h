@@ -19,6 +19,11 @@ typedef struct gradflow_workspace_t {
 
 typedef void (*gradflow_measure_cb)(int meas_idx, double t, void *user_data);
 
+void gradflow_compute_Z0_wilson(__restrict const su3_soa *V,
+                               __restrict gradflow_workspace *ws,
+                               double dt);
+
+
 typedef struct gradflow_adaptive_meas_params_t {
     double dt0;
     double delta;

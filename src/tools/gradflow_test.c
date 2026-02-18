@@ -168,6 +168,16 @@ int main(int argc, char **argv)
     gradflow_workspace ws;
     memset(&ws, 0, sizeof(ws));
     alloc_ws(&ws);
+    // debuggino
+    {
+        const double dt_force = 1.0;
+        gradflow_compute_Z0_wilson(conf_acc, &ws, dt_force);
+        const double z0_norm = calc_force_norm(ws.Z0);
+
+        if (devinfo.myrank == 0) {
+            printf("Z0 norm (dt=1) = %.18e\n", z0_norm);
+        }
+    }
 
     if (!use_adaptive) {
         for (int i = 0; i < nsteps_or_num_meas; i++) {
