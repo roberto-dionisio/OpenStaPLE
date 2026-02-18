@@ -237,6 +237,8 @@ double gradflow_wilson_RKstep_adaptive(__restrict su3_soa *V,
 
     if (new_dt > dt_max) new_dt = dt_max;
     if (new_dt < eps) new_dt = eps;
+    printf("AGF debug step %ld:acc =%d t:%.18lf->%.18lf dt_try=%.6e err=%.4e dt_new=%.6e \n",
+           (long int)(*t / *dt), *accepted, *t, *t + *dt, *dt, max_dist, new_dt);
     *dt = new_dt;
 
     return max_dist;
