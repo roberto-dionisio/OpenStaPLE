@@ -154,6 +154,13 @@ static void gradflow_compute_Z_wilson(__restrict const su3_soa *V,
 
     tamat_scale_inplace(Zout, +dt);  
 }
+//debug
+void gradflow_compute_Z0_wilson(__restrict const su3_soa *V,
+                               __restrict gradflow_workspace *ws,
+                               double dt)
+{
+    gradflow_compute_Z_wilson(V, ws->staples, ws->Z0, dt);
+}
 
 void gradflow_wilson_RKstep(__restrict su3_soa *V,
                                                         __restrict gradflow_workspace *ws,
