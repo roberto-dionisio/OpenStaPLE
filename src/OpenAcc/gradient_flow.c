@@ -152,6 +152,10 @@ static void gradflow_compute_Z_wilson(__restrict const su3_soa *V,
     calc_loc_staples_nnptrick_all(V, staples);
     conf_times_staples_ta_part(V, staples, Zout);
 
+#ifdef GAUGE_ACT_TLSM
+    tamat_scale_inplace(Zout, 1.0/C_ZERO); // compensate for the extra factor in the TLSM action
+#endif
+
     tamat_scale_inplace(Zout, +dt);  
 }
 //debug
