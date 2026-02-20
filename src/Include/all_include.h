@@ -30,6 +30,8 @@
 #include "../OpenAcc/find_min_max.h"
 #include "../OpenAcc/geometry.c"
 #include "../OpenAcc/geometry.h"
+#include "../OpenAcc/gradient_flow.c"
+#include "../OpenAcc/gradient_flow.h"
 #include "../OpenAcc/inverter_full.c"
 #include "../OpenAcc/inverter_full.h"
 #include "../OpenAcc/inverter_multishift_full.c"

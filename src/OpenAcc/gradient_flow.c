@@ -9,6 +9,53 @@
 #include "../Mpi/communications.h"
 #endif
 
+#ifndef ALIGN
+#define ALIGN 128
+#endif
+
+extern int verbosity_lv;
+
+int gradflow_ws_alloc(gradflow_workspace *ws)
+{
+    if (!ws) return 1;
+    memset(ws, 0, sizeof(*ws));
+
+    if (posix_memalign((void **)&ws->W1,      ALIGN, 8 * sizeof(su3_soa)))   return 1;
+    if (posix_memalign((void **)&ws->W2,      ALIGN, 8 * sizeof(su3_soa)))   return 1;
+    if (posix_memalign((void **)&ws->W2prime, ALIGN, 8 * sizeof(su3_soa)))   return 1;
+    if (posix_memalign((void **)&ws->staples, ALIGN, 8 * sizeof(su3_soa)))   return 1;
+    if (posix_memalign((void **)&ws->exp_aux, ALIGN, 8 * sizeof(su3_soa)))   return 1;
+
+    if (posix_memalign((void **)&ws->Z0,    ALIGN, 8 * sizeof(tamat_soa)))   return 1;
+    if (posix_memalign((void **)&ws->Z1,    ALIGN, 8 * sizeof(tamat_soa)))   return 1;
+    if (posix_memalign((void **)&ws->Z2,    ALIGN, 8 * sizeof(tamat_soa)))   return 1;
+    if (posix_memalign((void **)&ws->Zcomb, ALIGN, 8 * sizeof(tamat_soa)))   return 1;
+
+    #pragma acc enter data create(ws->W1[0:8], ws->W2[0:8], ws->W2prime[0:8], ws->staples[0:8], ws->exp_aux[0:8])
+    #pragma acc enter data create(ws->Z0[0:8], ws->Z1[0:8], ws->Z2[0:8], ws->Zcomb[0:8])
+
+    return 0;
+}
+
+void gradflow_ws_free(gradflow_workspace *ws)
+{
+    if (!ws) return;
+
+    #pragma acc exit data delete(ws->W1[0:8], ws->W2[0:8], ws->W2prime[0:8], ws->staples[0:8], ws->exp_aux[0:8])
+    #pragma acc exit data delete(ws->Z0[0:8], ws->Z1[0:8], ws->Z2[0:8], ws->Zcomb[0:8])
+
+    free(ws->W1);      ws->W1 = NULL;
+    free(ws->W2);      ws->W2 = NULL;
+    free(ws->W2prime); ws->W2prime = NULL;
+    free(ws->staples); ws->staples = NULL;
+    free(ws->exp_aux); ws->exp_aux = NULL;
+
+    free(ws->Z0);    ws->Z0 = NULL;
+    free(ws->Z1);    ws->Z1 = NULL;
+    free(ws->Z2);    ws->Z2 = NULL;
+    free(ws->Zcomb); ws->Zcomb = NULL;
+}
+
 static void su3_soa_copy(__restrict su3_soa *dst, __restrict const su3_soa *src)
 {
     int d0, d1, d2, d3;
@@ -256,8 +303,10 @@ double gradflow_wilson_RKstep_adaptive(__restrict su3_soa *V,
     if (new_dt < eps) new_dt = eps;
 
     dbg_attempt++;
-    printf("AGF dbg #%ld: acc=%d  t:%.18lf -> %.18lf  dt_try=%.6e  err=%.4e  dt_new=%.6e\n",
-           dbg_attempt, *accepted, t_before, *t, dt_try, max_dist, new_dt);
+    if (verbosity_lv >= 5){
+        printf("AGF dbg #%ld: acc=%d  t:%.18lf -> %.18lf  dt_try=%.6e  err=%.4e  dt_new=%.6e\n",
+               dbg_attempt, *accepted, t_before, *t, dt_try, max_dist, new_dt);
+    }
     *dt = new_dt;
 
     return max_dist;

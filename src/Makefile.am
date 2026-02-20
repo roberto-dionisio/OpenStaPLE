@@ -126,6 +126,8 @@ __common_sources = \
 	OpenAcc/float_double_conv.h \
 	OpenAcc/geometry.c \
 	OpenAcc/geometry.h \
+	OpenAcc/gradient_flow.c \
+	OpenAcc/gradient_flow.h \
 	OpenAcc/inverter_full.c \
 	OpenAcc/inverter_full.h \
 	OpenAcc/inverter_mixedp.c \

@@ -31,6 +31,9 @@ typedef struct gradflow_adaptive_meas_params_t {
     double time_bin;
 } gradflow_adaptive_meas_params;
 
+int gradflow_ws_alloc(gradflow_workspace *ws);
+void gradflow_ws_free(gradflow_workspace *ws);
+
 void gradflow_wilson_RKstep(__restrict su3_soa *V,
                                                         __restrict gradflow_workspace *ws,
                                                         double dt);
