@@ -6,6 +6,9 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <math.h>
+#include <time.h>
+#include <sys/time.h>
+
 
 #include "../Include/setting_file_parser.h"
 #include "../OpenAcc/alloc_vars.h"
@@ -14,6 +17,7 @@
 #include "../OpenAcc/deviceinit.h"
 #include "../OpenAcc/gradient_flow.h"
 #include "../OpenAcc/su3_measurements.h"
+
 
 #ifndef __GNUC__
 #include "openacc.h"
@@ -39,6 +43,17 @@ typedef struct meas_store_t {
     double *plaq_norm;   // size num_meas+1, plaq_norm[0] is t=0
     double *t_meas;      // size num_meas+1, t_meas[0] = 0
 } meas_store;
+
+static double walltime_now_s(void)
+{
+#ifdef MULTIDEVICE
+    return MPI_Wtime();
+#else
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (double)tv.tv_sec + 1.0e-6 * (double)tv.tv_usec;
+#endif
+}
 
 static int file_exists(const char *path)
 {
@@ -430,6 +445,7 @@ int main(int argc, char **argv)
     for (int idx =0 ; idx < nlist; idx+=conf_stride) {
         const char *conf_in = list[idx].name;
         int file_conf_id= 0;
+        const double t_conf_start = walltime_now_s();
         if (devinfo.myrank == 0) {
             printf("\n===Processing conf: %s ===\n", conf_in);
             fflush(stdout);
@@ -482,6 +498,7 @@ int main(int argc, char **argv)
 
         // Write as rows senno' Andrea si arrabbia
         if (devinfo.myrank == 0){
+            const double t_conf_end = walltime_now_s();
             fprintf(fp, "%lld", conf_id);
             for (int k =0; k <nt; k++) {
                 fprintf(fp, " %.18lf", plaq_norm[k]);
@@ -490,6 +507,7 @@ int main(int argc, char **argv)
             fflush(fp);
             printf("Measured conf_id=%lld  plaq(t+0)=%.18lf  plaq(t_final=%.18lf)=%.18lf\n",
                    conf_id, plaq_norm[0], t_meas[p.num_meas], plaq_norm[p.num_meas]);
+            printf("Time for conf_id=%lld : %.2f seconds\n", conf_id, t_conf_end - t_conf_start);
         }
         processed++;
     }
