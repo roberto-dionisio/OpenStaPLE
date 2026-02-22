@@ -391,7 +391,7 @@ int main(int argc, char **argv)
         }
         nlist = 1;
     } else {
-        if (list_confs_in_cwd(prefix_or_file, &list, &nlist != 0)) {
+        if (list_confs_in_cwd(prefix_or_file, &list, &nlist) != 0) {
             if (devinfo.myrank == 0) fprintf(stderr, "ERROR: failed to list conf files in current directory with prefix: %s\n", prefix_or_file);
             gradflow_ws_free(&ws);
             #ifdef MULTIDEVICE
@@ -414,7 +414,7 @@ int main(int argc, char **argv)
     if (devinfo.myrank == 0) {
         fp = fopen(out_file, "w");
         if (!fp) {
-            fprintf(stderr, "ERROR: failed to open measure out file: %s\n", out_file, strerror(errno));
+            fprintf(stderr, "ERROR: failed to open measure out file: %s: %s\n", out_file, strerror(errno));
             free_conf_list(list, nlist);
             gradflow_ws_free(&ws);
 #ifdef MULTIDEVICE
@@ -450,7 +450,7 @@ int main(int argc, char **argv)
     for (int idx =0 ; idx < nlist; idx+=conf_stride) {
         const char *conf_in = list[idx].name;
         int file_conf_id= 0;
-        if (device.myrank == 0) {
+        if (devinfo.myrank == 0) {
             printf("\n===Processing conf: %s ===\n", conf_in);
             fflush(stdout);
         }
