@@ -144,58 +144,40 @@ static int list_confs_in_cwd(const char *prefix, conf_entry **out_list, int *out
     return 0;
 }
 
-static void write_header_if_needed(FILE *fp,
-                                  const char *setfile,
-                                  const char *prefix_or_file,
-                                  int use_ildg,
-                                  int num_meas,
-                                  double dt0,
-                                  double meas_each,
-                                  int conf_stride,
-                                  const double *tvals,
-                                  int ntvals)
-{
-    fprintf(fp, "# OpenStaPLE offline gradient-flow plaquette measurements\n");
-    fprintf(fp, "# setfile: %s\n", setfile);
-    fprintf(fp, "# input:   %s\n", prefix_or_file);
-    fprintf(fp, "# use_ildg: %d\n", use_ildg);
-    fprintf(fp, "# geom: gnx=%d gny=%d gnz=%d gnt=%d (GL_SIZE=%d)\n",
-            geom_par.gnx, geom_par.gny, geom_par.gnz, geom_par.gnt, GL_SIZE);
-    fprintf(fp, "# flow: method=wilson_RK3 dt0=%.18g  meas_each=%.18g  num_meas=%d  conf_stride=%d\n",
-            dt0, meas_each, num_meas, conf_stride);
-    fprintf(fp, "# plaq_norm = plaq_raw / (GL_SIZE * 6 * 3)\n");
 
-    fprintf(fp, "# columns: conf_id");
-    for (int i = 0; i < ntvals; i++) fprintf(fp, " plaq(t=%.18g)", tvals[i]);
-    fprintf(fp, "\n");
 
-    fprintf(fp, "# t_values:");
-    for (int i = 0; i < ntvals; i++) fprintf(fp, " %.18g", tvals[i]);
-    fprintf(fp, "\n");
-    fflush(fp);
-}
-
-static void write_header(FILE *fp,
-                         const char *setfile,
+static void log_measure_config(const char *setfile,
                          const char *prefix_or_file,
                          int use_ildg,
                          const gradflow_adaptive_meas_params *p,
-                         int conf_stride)
+                         int conf_stride,
+                         const char *out_file,
+                         int nlist)
 {
-    fprintf(fp, "# OpenStaPLE offline adaptive gradient-flow plaquette measurements\n");
-    fprintf(fp, "# setfile: %s\n", setfile);
-    fprintf(fp, "# input:   %s\n", prefix_or_file);
-    fprintf(fp, "# use_ildg: %d\n", use_ildg);
-    fprintf(fp, "# geom: gnx=%d gny=%d gnz=%d gnt=%d (GL_SIZE=%d)\n",
-            geom_par.gnx, geom_par.gny, geom_par.gnz, geom_par.gnt, GL_SIZE);
+    if (devinfo.myrank != 0) return;
+    printf( "=== OpenStaPLE offline adaptive gradient-flow measurement ===\n");
+    printf( "setfile: %s\n", setfile);
+    printf( "input:   %s\n", prefix_or_file);
+    printf( "use_ildg: %d\n", use_ildg);
+    printf("out_file: %s\n", out_file);
+    printf("Found confs: %d\n", nlist);
+    printf("conf_stride: %d\n", conf_stride);
+    printf("Geometry: gnx=%d gny=%d gnz=%d gnt=%d (GL_SIZE=%d)\n",
+           geom_par.gnx, geom_par.gny, geom_par.gnz, geom_par.gnt, GL_SIZE);
+    printf("flow(method): wilson_RK3_adaptive\n");
+    printf("params      : num_meas=%d dt0=%.18g delta=%.3e dt_max=%.18g meas_each=%.18g time_bin=%.3e\n",
+           p->num_meas, p->dt0, p->delta, p->dt_max, p->meas_each, p->time_bin);
+    printf("output      : first column is conf_id; then plaq_norm at t=0, meas_each, 2*meas_each, ...\n");
+    printf("plaq_norm   : plaq_raw / (GL_SIZE * 6 * 3)\n");
+    
+    fflush(stdout);
+}
 
-    fprintf(fp, "# adaptive_flow: method=wilson_RK3_adaptive dt0=%.18g delta=%.3e dt_max=%.18g meas_each=%.18g time_bin=%.3e num_meas=%d conf_stride=%d\n",
-            p->dt0, p->delta, p->dt_max, p->meas_each, p->time_bin, p->num_meas, conf_stride);
-
-    fprintf(fp, "# plaq_norm = plaq_raw / (GL_SIZE * 6 * 3)\n");
-    fprintf(fp, "# columns: conf_id plaq(t=0)");
+static void write_header(FILE *fp, const gradflow_adaptive_meas_params *p){
+    fprintf(fp, "# conf_id");
+    fprintf(fp, " t=0");
     for (int k = 1; k <= p->num_meas; k++) {
-        fprintf(fp, " plaq(t=%.18g)", p->meas_each * (double)k);
+        fprintf(fp, " t=%.18g", p->meas_each * (double)k);
     }
     fprintf(fp, "\n");
     fflush(fp);
@@ -228,7 +210,7 @@ static void meas_cb_store_plaq(int meas_idx, double t, void *user_data)
 static void print_usage(const char *prog)
 {
     fprintf(stderr,
-            "USAGE (adaptive offline scan):\n"
+            "USAGE (AGF offline scan):\n"
             "  %s <input.set> <conf_prefix|conf_file> <use_ildg:0|1> <num_meas> <dt0> <delta> <dt_max> <meas_each> <time_bin> [options]\n"
             "\n"
             "Options:\n"
@@ -239,7 +221,7 @@ static void print_usage(const char *prog)
             "Notes:\n"
             "  - If <conf_prefix|conf_file> is an existing file, only that file is processed.\n"
             "  - Otherwise scans current directory for files starting with prefix and having numeric suffix after last '.'\n"
-            "    e.g. stored_conf.12850\n",
+            "    e.g. stored_conf.00010\n",
             prog);
 }
 
@@ -422,11 +404,8 @@ int main(int argc, char **argv)
 #endif
             return 2;
         }
-        write_header(fp, setfile, prefix_or_file, use_ildg, &p, conf_stride);
-        printf("Adaptive Gradient Flow offline driver: found %d confs, conf_stride=%d, will process %d confs\n",
-               nlist, conf_stride, (nlist + conf_stride - 1) / conf_stride);
-        printf("Output: %s\n", out_file);
-        fflush(stdout);
+        log_measure_config(setfile, prefix_or_file, use_ildg, &p, conf_stride, out_file, nlist);
+        write_header(fp, &p);
     }   
 
     //Allocate meas buffer
