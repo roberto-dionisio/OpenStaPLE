@@ -5,6 +5,7 @@
 #include <dirent.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <math.h>
 
 #include "../Include/setting_file_parser.h"
 #include "../OpenAcc/alloc_vars.h"
