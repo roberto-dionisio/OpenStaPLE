@@ -77,6 +77,20 @@ static char *path_join2(const char *dir, const char *name)
     else            snprintf(out, out_len, "%s%s",  dir, name);
     return out;
 }
+static int path_is_regular_file(const char *path)
+{
+    struct stat st;
+    if (stat(path, &st) != 0) return 0;
+    return S_ISREG(st.st_mode);
+}
+
+static int path_is_dir(const char *path)
+{
+    struct stat st;
+    if (stat(path, &st) != 0) return 0;
+    return S_ISDIR(st.st_mode);
+}
+
 //patch to accept path instead forking in cwd, TODO: do better
 
 static long long parse_conf_id_from_name(const char *fname)
@@ -395,7 +409,8 @@ int main(int argc, char **argv)
     //list of confs to process
     conf_entry *list = NULL;
     int nlist = 0;
-    const int single_file_mode = file_exists(prefix_or_file);
+    const int single_file_mode = path_is_regular_file(prefix_or_file);
+    const int dir_mode = path_is_dir(prefix_or_file);
     if (single_file_mode) {
         list = (conf_entry *)calloc(1, sizeof(*list));
         if (!list) {
@@ -410,6 +425,7 @@ int main(int argc, char **argv)
         list[0].id = parse_conf_id_from_name(prefix_or_file);
         if (!list[0].name || list[0].id < 0) {
             if (devinfo.myrank == 0) fprintf(stderr, "ERROR: invalid conf file name: %s\n", prefix_or_file);
+            free(list[0].name);
             free(list);
             gradflow_ws_free(&ws);
 #ifdef MULTIDEVICE
@@ -423,22 +439,30 @@ int main(int argc, char **argv)
         const char *scan_prefix = prefix_or_file;
         char *dir_buf = NULL;
         const char *slash = strrchr(prefix_or_file, '/');
-        if (slash) {
-            const size_t dir_len = (size_t)(slash - prefix_or_file);
-            dir_buf = (char *)malloc(dir_len + 1);
-            if (!dir_buf) {
-                if (devinfo.myrank == 0) fprintf(stderr, "ERROR: OOM while parsing conf path.\n");
-                gradflow_ws_free(&ws);
-#ifdef MULTIDEVICE
-                MPI_Finalize();
-#endif
-                return 2;
-            }
-            memcpy(dir_buf, prefix_or_file, dir_len);
-            dir_buf[dir_len] = '\0';
+        if (dir_mode) {
+            //passed a dir-> scan it, no prefix filter
+            scan_dir = prefix_or_file;
+            scan_prefix = "";
+        } else {
+            //dir/prefix if it contains '/'
+            const char *slash = strrchr(prefix_or_file, '/');
+            if (slash) {
+                const size_t dir_len = (size_t)(slash - prefix_or_file);
+                dir_buf = (char *)malloc(dir_len + 1);
+                if (!dir_buf) {
+                    if (devinfo.myrank == 0) fprintf(stderr, "ERROR: OOM while parsing conf path.\n");
+                    gradflow_ws_free(&ws);
+    #ifdef MULTIDEVICE
+                    MPI_Finalize();
+    #endif
+                    return 2;
+                }
+                memcpy(dir_buf, prefix_or_file, dir_len);
+                dir_buf[dir_len] = '\0';
 
-            scan_dir = (dir_len == 0) ? "/" : dir_buf;
-            scan_prefix = slash + 1; // may be empty -> match everything with numeric suffix
+                scan_dir = (dir_len == 0) ? "/" : dir_buf;
+                scan_prefix = slash + 1; // may be empty
+            }
         }
         if (list_confs_in_dir(scan_dir, scan_prefix, &list, &nlist) != 0) {
             if (devinfo.myrank == 0) {
