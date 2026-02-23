@@ -61,6 +61,24 @@ static int file_exists(const char *path)
     return (stat(path, &st) == 0);
 }
 
+static char *path_join2(const char *dir, const char *name)
+{
+    if (!dir || !*dir || strcmp(dir, ".") == 0) return strdup(name);
+
+    const size_t dl = strlen(dir);
+    const size_t nl = strlen(name);
+    const int need_slash = (dl > 0 && dir[dl - 1] != '/');
+
+    const size_t out_len = dl + (need_slash ? 1 : 0) + nl + 1;
+    char *out = (char *)malloc(out_len);
+    if (!out) return NULL;
+
+    if (need_slash) snprintf(out, out_len, "%s/%s", dir, name);
+    else            snprintf(out, out_len, "%s%s",  dir, name);
+    return out;
+}
+//patch to accept path instead forking in cwd, TODO: do better
+
 static long long parse_conf_id_from_name(const char *fname)
 {
     // expected something.{digits}  (having in minnd stored_conf.00010)
@@ -97,12 +115,12 @@ static void free_conf_list(conf_entry *list, int n)
 }
 
 // prepare list of confs in current dir matching pattern and sorted by id
-static int list_confs_in_cwd(const char *prefix, conf_entry **out_list, int *out_n)
+static int list_confs_in_dir(const char *dirpath,const char *prefix, conf_entry **out_list, int *out_n)
 {
     *out_list = NULL;
     *out_n = 0;
 
-    DIR *dir = opendir(".");
+    DIR *dir = opendir(dirpath);
     if (!dir) return 1;
 
     int cap = 128;
@@ -121,15 +139,30 @@ static int list_confs_in_cwd(const char *prefix, conf_entry **out_list, int *out
         if (!starts_with(name, prefix)) continue;
         if (de->d_type != DT_REG && de->d_type != DT_UNKNOWN) continue;
 
-        if (!file_exists(name)) continue;
+        char *fullpath = path_join2(dirpath, name);
+        if (!fullpath) {
+            free_conf_list(list, n);
+            closedir(dir);
+            return 1;
+        }
+
+        if (!file_exists(fullpath)) {
+            free(fullpath);
+            continue;
+        }
 
         long long id = parse_conf_id_from_name(name);
-        if (id < 0) continue;
+        if (id < 0) {
+            free(fullpath);
+         continue;
+        }
+
 
         if (n == cap) {
             cap *= 2;
             conf_entry *tmp = (conf_entry *)realloc(list, (size_t)cap * sizeof(*list));
             if (!tmp) {
+                free(fullpath);
                 free_conf_list(list, n);
                 closedir(dir);
                 return 1;
@@ -138,12 +171,7 @@ static int list_confs_in_cwd(const char *prefix, conf_entry **out_list, int *out
         }
 
         list[n].id = id;
-        list[n].name = strdup(name);
-        if (!list[n].name) {
-            free_conf_list(list, n);
-            closedir(dir);
-            return 1;
-        }
+        list[n].name = fullpath;
         n++;
     }
     closedir(dir);
@@ -235,7 +263,9 @@ static void print_usage(const char *prog)
             "  -v <lvl>             Set verbosity_lv (default: keep current)\n"
             "\n"
             "Notes:\n"
-            "  - If <conf_prefix|conf_file> is an existing file, only that file is processed.\n"
+            "  - <conf_prefix|conf_file> can be:\n"
+            "      * a file path: /path/to/stored_conf.00010\n"
+            "      * a prefix (opt with a directory): /path/to/stored_conf\n"
             "  - Otherwise scans current directory for files starting with prefix and having numeric suffix after last '.'\n"
             "    e.g. stored_conf.00010\n",
             prog);
@@ -389,16 +419,42 @@ int main(int argc, char **argv)
         }
         nlist = 1;
     } else {
-        if (list_confs_in_cwd(prefix_or_file, &list, &nlist) != 0) {
-            if (devinfo.myrank == 0) fprintf(stderr, "ERROR: failed to list conf files in current directory with prefix: %s\n", prefix_or_file);
+        const char *scan_dir = ".";
+        const char *scan_prefix = prefix_or_file;
+        char *dir_buf = NULL;
+        const char *slash = strrchr(prefix_or_file, '/');
+        if (slash) {
+            const size_t dir_len = (size_t)(slash - prefix_or_file);
+            dir_buf = (char *)malloc(dir_len + 1);
+            if (!dir_buf) {
+                if (devinfo.myrank == 0) fprintf(stderr, "ERROR: OOM while parsing conf path.\n");
+                gradflow_ws_free(&ws);
+#ifdef MULTIDEVICE
+                MPI_Finalize();
+#endif
+                return 2;
+            }
+            memcpy(dir_buf, prefix_or_file, dir_len);
+            dir_buf[dir_len] = '\0';
+
+            scan_dir = (dir_len == 0) ? "/" : dir_buf;
+            scan_prefix = slash + 1; // may be empty -> match everything with numeric suffix
+        }
+        if (list_confs_in_dir(scan_dir, scan_prefix, &list, &nlist) != 0) {
+            if (devinfo.myrank == 0) {
+                fprintf(stderr, "ERROR: failed to list conf files in dir=%s with prefix='%s'\n",
+                        scan_dir, scan_prefix);
+            }
+            free(dir_buf);
             gradflow_ws_free(&ws);
-            #ifdef MULTIDEVICE
+#ifdef MULTIDEVICE
             MPI_Finalize();
 #endif
             return 2;
         }
+        free(dir_buf);
         if (nlist == 0) {
-            if (devinfo.myrank == 0) fprintf(stderr, "ERROR: no conf files found in current directory with prefix: %s\n", prefix_or_file);
+            if (devinfo.myrank == 0) fprintf(stderr, "ERROR: no conf files found for input: %s\n", prefix_or_file);
             gradflow_ws_free(&ws);
 #ifdef MULTIDEVICE
             MPI_Finalize();
