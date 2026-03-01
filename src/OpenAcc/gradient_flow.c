@@ -280,7 +280,7 @@ static void gradflow_compute_Z_wilson(__restrict const su3_soa *V,
 #endif
 
     //tamat_scale_inplace(Zout, +scale);  
-    conf_times_staples_ta_part(V, staples, Zout, scale);
+    conf_times_staples_ta_part_scaled(V, staples, Zout, scale);
 }
 //debug
 void gradflow_compute_Z0_wilson(__restrict const su3_soa *V,
