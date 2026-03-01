@@ -102,7 +102,7 @@ void stout_isotropic(__restrict const su3_soa * const u, // input conf
 
 
 
-
+/*
 #pragma acc routine seq
 static inline void conf_left_exp_multiply_to_su3_soa(__restrict const su3_soa * const cnf, const int idx,
 																										 __restrict su3_soa * const  EXP,
@@ -131,7 +131,7 @@ static inline void conf_left_exp_multiply_to_su3_soa(__restrict const su3_soa * 
 	cnf_out->r1.c2[idx] = EXP->r1.c0[idx] * AUX.comp[0][2] + EXP->r1.c1[idx] * AUX.comp[1][2] + EXP->r1.c2[idx] * AUX.comp[2][2];
 
 }
-
+*/
 
 void exp_minus_QA_times_conf(__restrict const su3_soa * const tu,
 														 __restrict const tamat_soa * QA,
