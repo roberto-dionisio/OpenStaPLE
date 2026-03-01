@@ -348,33 +348,33 @@ static double gradflow_wilson_RKstep_adaptive_aux(__restrict const su3_soa *W0,
 {
     // Z0, W1 = exp(-1/4 Z0) W0
     gradflow_compute_Z_wilson(W0, ws->staples, ws->Z0, dt);
-    tamat_lincomb2(ws->Zcomb, ws->Z0, 0.25, ws->Z0, 0.0);
-    exp_minus_QA_times_conf(W0, ws->Zcomb, ws->W1, ws->exp_aux);
-    //exp_minus_lincomb2_QA_times_conf_fused(W0, ws->Z0, 0.25, ws->Z0, 0.0,
-    //                                      ws->W1, ws->exp_aux, ws->Zcomb);
+    //tamat_lincomb2(ws->Zcomb, ws->Z0, 0.25, ws->Z0, 0.0);
+    //exp_minus_QA_times_conf(W0, ws->Zcomb, ws->W1, ws->exp_aux);
+    exp_minus_lincomb2_QA_times_conf_fused(W0, ws->Z0, 0.25, ws->Z0, 0.0,
+                                          ws->W1, ws->exp_aux, ws->Zcomb);
 
     // Z1
     gradflow_compute_Z_wilson(ws->W1, ws->staples, ws->Z1, dt);
 
     // W2' = exp(-(2 Z1 - Z0)) W0   (second order estimate)
-    tamat_lincomb2(ws->Zcomb, ws->Z1, 2.0, ws->Z0, -1.0);
+    //tamat_lincomb2(ws->Zcomb, ws->Z1, 2.0, ws->Z0, -1.0);
     exp_minus_QA_times_conf(W0, ws->Zcomb, ws->W2prime, ws->exp_aux);
-    //exp_minus_lincomb2_QA_times_conf_fused(W0, ws->Z1, 2.0, ws->Z0, -1.0,
-    //                                      ws->W2prime, ws->exp_aux, ws->Zcomb);
+    exp_minus_lincomb2_QA_times_conf_fused(W0, ws->Z1, 2.0, ws->Z0, -1.0,
+                                          ws->W2prime, ws->exp_aux, ws->Zcomb);
 
     // W2 = exp(-(8/9 Z1 - 17/36 Z0)) W1
-    tamat_lincomb2(ws->Zcomb, ws->Z1, (8.0 / 9.0), ws->Z0, (-17.0 / 36.0));
-    exp_minus_QA_times_conf(ws->W1, ws->Zcomb, ws->W2, ws->exp_aux);
-    //exp_minus_lincomb2_QA_times_conf_fused(ws->W1, ws->Z1, (8.0 / 9.0), ws->Z0, (-17.0 / 36.0),
-    //                                      ws->W2, ws->exp_aux, ws->Zcomb);
+    //tamat_lincomb2(ws->Zcomb, ws->Z1, (8.0 / 9.0), ws->Z0, (-17.0 / 36.0));
+    //exp_minus_QA_times_conf(ws->W1, ws->Zcomb, ws->W2, ws->exp_aux);
+    exp_minus_lincomb2_QA_times_conf_fused(ws->W1, ws->Z1, (8.0 / 9.0), ws->Z0, (-17.0 / 36.0),
+                                          ws->W2, ws->exp_aux, ws->Zcomb);
 
 
     // Z2 and W3 (third order result) into ws->W1 reusing the buffer 
     gradflow_compute_Z_wilson(ws->W2, ws->staples, ws->Z2, dt);
-    tamat_lincomb2(ws->Zcomb, ws->Z2, (3.0 / 4.0), ws->Zcomb, -1.0);
-    exp_minus_QA_times_conf(ws->W2, ws->Zcomb, ws->W1, ws->exp_aux);
-    //exp_minus_lincomb2_QA_times_conf_fused(ws->W2, ws->Z2, (3.0 / 4.0), ws->Zcomb, -1.0,
-    //                                      ws->W1, ws->exp_aux, ws->Z1 /*unused tamat soa*/);
+    //tamat_lincomb2(ws->Zcomb, ws->Z2, (3.0 / 4.0), ws->Zcomb, -1.0);
+    //exp_minus_QA_times_conf(ws->W2, ws->Zcomb, ws->W1, ws->exp_aux);
+    exp_minus_lincomb2_QA_times_conf_fused(ws->W2, ws->Z2, (3.0 / 4.0), ws->Zcomb, -1.0,
+                                          ws->W1, ws->exp_aux, ws->Z1 /*unused tamat soa*/);
 
 
     // error estimate
