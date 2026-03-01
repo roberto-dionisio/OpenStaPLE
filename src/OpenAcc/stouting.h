@@ -9,34 +9,6 @@
 #define __restrict
 #endif
 
-#pragma acc routine seq
-static inline void conf_left_exp_multiply_to_su3_soa(__restrict const su3_soa * const cnf, const int idx,
-																										 __restrict su3_soa * const  EXP,
-																										 __restrict su3_soa * const cnf_out)
-{
-	single_su3 AUX;
-	// multiply: U_new = EXP * U_old
-	AUX.comp[0][0] = cnf->r0.c0[idx];
-	AUX.comp[0][1] = cnf->r0.c1[idx];
-	AUX.comp[0][2] = cnf->r0.c2[idx];
-	AUX.comp[1][0] = cnf->r1.c0[idx];
-	AUX.comp[1][1] = cnf->r1.c1[idx];
-	AUX.comp[1][2] = cnf->r1.c2[idx];
-	// rebuild third row
-	AUX.comp[2][0] = conj(AUX.comp[0][1] * AUX.comp[1][2] - AUX.comp[0][2] * AUX.comp[1][1]);
-	AUX.comp[2][1] = conj(AUX.comp[0][2] * AUX.comp[1][0] - AUX.comp[0][0] * AUX.comp[1][2]);
-	AUX.comp[2][2] = conj(AUX.comp[0][0] * AUX.comp[1][1] - AUX.comp[0][1] * AUX.comp[1][0]);
-
-	// multiply
-	cnf_out->r0.c0[idx] = EXP->r0.c0[idx] * AUX.comp[0][0] + EXP->r0.c1[idx] * AUX.comp[1][0] + EXP->r0.c2[idx] * AUX.comp[2][0];
-	cnf_out->r0.c1[idx] = EXP->r0.c0[idx] * AUX.comp[0][1] + EXP->r0.c1[idx] * AUX.comp[1][1] + EXP->r0.c2[idx] * AUX.comp[2][1];
-	cnf_out->r0.c2[idx] = EXP->r0.c0[idx] * AUX.comp[0][2] + EXP->r0.c1[idx] * AUX.comp[1][2] + EXP->r0.c2[idx] * AUX.comp[2][2];
-
-	cnf_out->r1.c0[idx] = EXP->r1.c0[idx] * AUX.comp[0][0] + EXP->r1.c1[idx] * AUX.comp[1][0] + EXP->r1.c2[idx] * AUX.comp[2][0];
-	cnf_out->r1.c1[idx] = EXP->r1.c0[idx] * AUX.comp[0][1] + EXP->r1.c1[idx] * AUX.comp[1][1] + EXP->r1.c2[idx] * AUX.comp[2][1];
-	cnf_out->r1.c2[idx] = EXP->r1.c0[idx] * AUX.comp[0][2] + EXP->r1.c1[idx] * AUX.comp[1][2] + EXP->r1.c2[idx] * AUX.comp[2][2];
-
-}
 
 void exp_minus_QA_times_conf(__restrict const su3_soa * const tu,
 														 __restrict const tamat_soa * QA,
