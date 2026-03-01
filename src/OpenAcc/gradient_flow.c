@@ -339,7 +339,7 @@ void gradflow_wilson_RKstep(__restrict su3_soa *V,
     exp_minus_QA_times_conf(ws->W2, ws->Zcomb, V, ws->exp_aux);
 
     // safety
-     unitarize_conf(V);
+    // unitarize_conf(V);
 }
 
 static double gradflow_wilson_RKstep_adaptive_aux(__restrict const su3_soa *W0,
@@ -358,7 +358,7 @@ static double gradflow_wilson_RKstep_adaptive_aux(__restrict const su3_soa *W0,
 
     // W2' = exp(-(2 Z1 - Z0)) W0   (second order estimate)
     //tamat_lincomb2(ws->Zcomb, ws->Z1, 2.0, ws->Z0, -1.0);
-    exp_minus_QA_times_conf(W0, ws->Zcomb, ws->W2prime, ws->exp_aux);
+    //exp_minus_QA_times_conf(W0, ws->Zcomb, ws->W2prime, ws->exp_aux);
     exp_minus_lincomb2_QA_times_conf_fused(W0, ws->Z1, 2.0, ws->Z0, -1.0,
                                           ws->W2prime, ws->exp_aux, ws->Zcomb);
 
