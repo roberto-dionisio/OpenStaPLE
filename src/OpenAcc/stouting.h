@@ -9,6 +9,8 @@
 #define __restrict
 #endif
 
+#pragma acc routine seq
+void conf_left_exp_multiply_to_su3_soa(const su3_soa *cnf, int idx, su3_soa *EXP, su3_soa *cnf_out);
 
 void exp_minus_QA_times_conf(__restrict const su3_soa * const tu,
 														 __restrict const tamat_soa * QA,
