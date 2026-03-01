@@ -119,7 +119,7 @@ static double su3_soa_max_dist(__restrict const su3_soa *A,
                         dist2 += creal(d11) * creal(d11) + cimag(d11) * cimag(d11);
                         dist2 += creal(d12) * creal(d12) + cimag(d12) * cimag(d12);
 
-                        const double dist = dist2;
+                        const double dist = sqrt(dist2);
                         if (dist > maxd) maxd = dist;
                     }
                 }
@@ -128,7 +128,7 @@ static double su3_soa_max_dist(__restrict const su3_soa *A,
     }
 
     // norm by Nc**3
-    return sqrt(maxd) / 9.0;
+    return maxd / 9.0;
 }
 
 #pragma acc routine seq
@@ -381,7 +381,7 @@ static double gradflow_wilson_RKstep_adaptive_aux(__restrict const su3_soa *W0,
     const double max_dist = su3_soa_max_dist(ws->W1, ws->W2prime);
 
     // unitarizationn of the accepted sol
-    //unitarize_conf(ws->W1);
+    unitarize_conf(ws->W1);
 
     return max_dist;
 }
