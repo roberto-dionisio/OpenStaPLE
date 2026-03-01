@@ -298,9 +298,9 @@ static void gradflow_compute_Z_wilson(__restrict const su3_soa *V,
     communicate_su3_borders((su3_soa*)V, GAUGE_HALO);
 #endif
 
-    //set_su3_soa_to_zero(staples);
+    set_su3_soa_to_zero(staples);
     calc_loc_staples_nnptrick_all(V, staples);
-    //conf_times_staples_ta_part(V, staples, Zout);
+    conf_times_staples_ta_part(V, staples, Zout);
 
     double scale = dt;
 #ifdef GAUGE_ACT_TLSM
@@ -308,8 +308,8 @@ static void gradflow_compute_Z_wilson(__restrict const su3_soa *V,
     scale *= 1.0/C_ZERO; 
 #endif
 
-    //tamat_scale_inplace(Zout, +scale);  
-    conf_times_staples_ta_part_scaled(V, staples, Zout, scale);
+    tamat_scale_inplace(Zout, +scale);  
+    //conf_times_staples_ta_part_scaled(V, staples, Zout, scale);
 }
 //debug
 void gradflow_compute_Z0_wilson(__restrict const su3_soa *V,
