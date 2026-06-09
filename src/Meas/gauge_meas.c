@@ -293,17 +293,17 @@ void compute_topological_charge_density(__restrict const su3_soa * const u,
                                         __restrict su3_soa * const quadri,
                                         double_soa * const loc_q)
 {
-    int par, i;
+    int i;
 #pragma acc data present(quadri) present(loc_q)
-    {
-        set_su3_soa_to_zero(quadri);
+    set_su3_soa_to_zero(quadri);
+
 #pragma acc kernels present(loc_q)
 #pragma acc loop independent
-        for(par = 0; par < 2; par++)
+    for(i = 0; i < (int)sizeh; i++) loc_q[0].d[i] = 0.0;
+#pragma acc kernels present(loc_q)
 #pragma acc loop independent
-            for(i = 0; i < (int)sizeh; i++)
-                loc_q[par].d[i] = 0.0;
-    }
+    for(i = 0; i < (int)sizeh; i++) loc_q[1].d[i] = 0.0;
+
     acc_local_topological_charge(u, quadri, loc_q, 0, 1);
     acc_local_topological_charge(u, quadri, loc_q, 0, 2);
     acc_local_topological_charge(u, quadri, loc_q, 0, 3);
