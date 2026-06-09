@@ -158,13 +158,13 @@ double reduce_loc_top_charge(double_soa * const loc_q)
     return result;
 }
 
-double compute_topological_charge(__restrict const su3_soa * const u, su3_soa * const quadri, double_soa * const loc_q){  
+double compute_topological_charge(__restrict const su3_soa * const u, su3_soa * const quadri, double_soa * const loc_q){
 
 
 #pragma acc data present(quadri) present(loc_q)
 	set_su3_soa_to_zero(quadri); // forse non serve a una mazza
 
-	
+
     double temp_ch;
     compute_local_topological_charge(u,quadri,loc_q,0,1);// (d0,d1) - (d2,d3)
     temp_ch = reduce_loc_top_charge(loc_q);
@@ -175,6 +175,138 @@ double compute_topological_charge(__restrict const su3_soa * const u, su3_soa * 
 
 
     return  temp_ch;
+}
+
+//identical to compute_local_topological_charge but does NOT reset loc_q to zero
+void acc_local_topological_charge(__restrict const su3_soa * const u,
+                                  __restrict su3_soa * const quadri,
+                                  double_soa * const loc_q,
+                                  int mu, int nu)
+{
+    int d0, d1, d2, d3;
+#pragma acc kernels present(u) present(quadri) present(loc_q) present(nnp_openacc) present(nnm_openacc)
+#pragma loop independent gang
+    for(d3=D3_HALO; d3<nd3-D3_HALO; d3++) {
+#pragma acc loop independent gang vector
+        for(d2=0; d2<nd2; d2++) {
+#pragma acc loop independent gang vector
+            for(d1=0; d1<nd1; d1++) {
+#pragma acc loop independent vector
+                for(d0=0; d0 < nd0; d0++) {
+                    const int idxh = snum_acc(d0,d1,d2,d3);
+                    const int parity = (d0+d1+d2+d3) % 2;
+                    int b;
+                    int a;
+                    int rho;
+                    int sigma;
+                    int Epsilon;
+
+                    if(nu!=3)b=nu+1;
+                    if(nu==3 && mu!=2)b=mu+1;
+                    if(nu==3 && mu==2)b=1;
+                    a=6-mu-nu-b;
+                    if(a<b){rho=a;}else{rho=b;}
+                    sigma=a+b-rho;
+                    if((mu==0 && nu==2)||(mu==1 && nu==3)){
+                        Epsilon=-1;
+                    }else{
+                        Epsilon=1;
+                    }
+
+                    int idxpmu = nnp_openacc[idxh][mu][parity];
+                    int idxpnu = nnp_openacc[idxh][nu][parity];
+                    int idxmmu = nnm_openacc[idxh][mu][parity];
+                    int idxmnu = nnm_openacc[idxh][nu][parity];
+                    int idxmmupnu = nnp_openacc[idxmmu][nu][!parity];
+                    int idxmmumnu = nnm_openacc[idxmmu][nu][!parity];
+                    int idxpmumnu = nnm_openacc[idxpmu][nu][!parity];
+
+                    comp_U_U_Udag_Udag(&u[2*mu+parity],   idxh,
+                            &u[2*nu+!parity],  idxpmu,
+                            &u[2*mu+!parity],  idxpnu,
+                            &u[2*nu+parity],   idxh,
+                            &quadri[parity],   idxh);
+
+                    comp_and_add_U_Udag_Udag_U(&u[2*nu+parity],   idxh,
+                            &u[2*mu+parity],   idxmmupnu,
+                            &u[2*nu+!parity],  idxmmu,
+                            &u[2*mu+!parity],  idxmmu,
+                            &quadri[parity],   idxh);
+
+                    comp_and_add_Udag_Udag_U_U(&u[2*mu+!parity],  idxmmu,
+                            &u[2*nu+parity],   idxmmumnu,
+                            &u[2*mu+parity],   idxmmumnu,
+                            &u[2*nu+!parity],  idxmnu,
+                            &quadri[parity],   idxh);
+
+                    comp_and_add_Udag_U_U_Udag(&u[2*nu+!parity],  idxmnu,
+                            &u[2*mu+!parity],  idxmnu,
+                            &u[2*nu+parity],   idxpmumnu,
+                            &u[2*mu+parity],   idxh,
+                            &quadri[parity],   idxh);
+
+                    int idxprho   = nnp_openacc[idxh][rho][parity];
+                    int idxpsigma = nnp_openacc[idxh][sigma][parity];
+                    int idxmrho   = nnm_openacc[idxh][rho][parity];
+                    int idxmsigma = nnm_openacc[idxh][sigma][parity];
+                    int idxmrhopsigma = nnp_openacc[idxmrho][sigma][!parity];
+                    int idxmrhomsigma = nnm_openacc[idxmrho][sigma][!parity];
+                    int idxprhomsigma = nnm_openacc[idxprho][sigma][!parity];
+
+                    comp_U_U_Udag_Udag(&u[2*rho+parity],     idxh,
+                            &u[2*sigma+!parity],  idxprho,
+                            &u[2*rho+!parity],    idxpsigma,
+                            &u[2*sigma+parity],   idxh,
+                            &quadri[2+parity],    idxh);
+
+                    comp_and_add_U_Udag_Udag_U(&u[2*sigma+parity],   idxh,
+                            &u[2*rho+parity],     idxmrhopsigma,
+                            &u[2*sigma+!parity],  idxmrho,
+                            &u[2*rho+!parity],    idxmrho,
+                            &quadri[2+parity],    idxh);
+
+                    comp_and_add_Udag_Udag_U_U(&u[2*rho+!parity],    idxmrho,
+                            &u[2*sigma+parity],   idxmrhomsigma,
+                            &u[2*rho+parity],     idxmrhomsigma,
+                            &u[2*sigma+!parity],  idxmsigma,
+                            &quadri[2+parity],    idxh);
+
+                    comp_and_add_Udag_U_U_Udag(&u[2*sigma+!parity],  idxmsigma,
+                            &u[2*rho+!parity],    idxmsigma,
+                            &u[2*sigma+parity],   idxprhomsigma,
+                            &u[2*rho+parity],     idxh,
+                            &quadri[2+parity],    idxh);
+
+                    combine_fourleaves_to_get_loc_q(&quadri[  parity],   idxh,
+                            &quadri[2+parity],   idxh,
+                            Epsilon,
+                            &loc_q[parity],      idxh);
+                }
+            }
+        }
+    }
+}
+
+
+// Compute the full per-site topological charge density by accumulating after this loc_q holds q(x) for each site
+void compute_topological_charge_density(__restrict const su3_soa * const u,
+                                        __restrict su3_soa * const quadri,
+                                        double_soa * const loc_q)
+{
+    int par, i;
+#pragma acc data present(quadri) present(loc_q)
+    {
+        set_su3_soa_to_zero(quadri);
+#pragma acc kernels present(loc_q)
+#pragma acc loop independent
+        for(par = 0; par < 2; par++)
+#pragma acc loop independent
+            for(i = 0; i < (int)sizeh; i++)
+                loc_q[par].d[i] = 0.0;
+    }
+    acc_local_topological_charge(u, quadri, loc_q, 0, 1);
+    acc_local_topological_charge(u, quadri, loc_q, 0, 2);
+    acc_local_topological_charge(u, quadri, loc_q, 0, 3);
 }
 
 

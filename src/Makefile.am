@@ -84,6 +84,8 @@ __common_sources = \
 	Meas/polyakov.h \
 	Meas/measure_topo.c \
 	Meas/measure_topo.h \
+	Meas/topo_timeslice.c \
+	Meas/topo_timeslice.h \
 	Mpi/communications.c \
 	Mpi/communications.h \
 	Mpi/dbgtools.h \
@@ -175,7 +177,7 @@ __common_sources = \
 	tests_and_benchmarks/test_and_benchmarks.c \
 	tests_and_benchmarks/test_and_benchmarks.h 
 
-bin_PROGRAMS = main deo_doe_test inverter_multishift_test checkinput confconverter confrestart gradflow_test
+bin_PROGRAMS = main deo_doe_test inverter_multishift_test checkinput confconverter confrestart gradflow_test topo_timeslice_meas
 
 noinst_LIBRARIES = libdbghook.a
 
@@ -221,6 +223,11 @@ gradflow_test_SOURCES = tools/gradflow_test.c \
 	$(__common_sources)
 
 nodist_gradflow_test_SOURCES = $(__common_generated_sources)
+
+topo_timeslice_meas_SOURCES = tools/topo_timeslice_meas.c \
+	$(__common_sources)
+
+nodist_topo_timeslice_meas_SOURCES = $(__common_generated_sources)
 
 libdbghook_a_SOURCES = DbgTools/debugger_hook.c
 libdbghook_a_CFLAGS = -O0

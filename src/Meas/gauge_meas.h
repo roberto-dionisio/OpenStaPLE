@@ -433,6 +433,14 @@ double compute_topological_charge(__restrict const su3_soa * const u,
 				  __restrict su3_soa * const quadri,
 				  double_soa * const loc_q);
 
+void acc_local_topological_charge(__restrict const su3_soa * const u,
+                                  __restrict su3_soa * const quadri,
+                                  double_soa * const loc_q,
+                                  int mu, int nu);
+
+void compute_topological_charge_density(__restrict const su3_soa * const u,
+                                        __restrict su3_soa * const quadri,
+                                        double_soa * const loc_q);
 
 
 
